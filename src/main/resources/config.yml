@@ -1,0 +1,50 @@
+chrono:
+  timezone: "Asia/Seoul"
+  cycle_unit: "week"
+  cycle_begin_at: "friday"
+storage:
+  storage_method: "sqlite"
+  storage_address: ""
+  storage_port: "3306"
+  storage_database: "zen"
+  storage_username: ""
+  storage_password: ""
+  use_reward_history: false
+  reward_buffer_expires: 30
+logic:
+  permission_method: "luckperm"
+  grades:
+    - default
+    - associate
+    - regular
+    - senior
+  votes_for_grade:
+    - 0
+    - 1
+    - 3
+    - 5
+  vote_reward_type: "minecraft"
+  vote_reward_code: ""
+  vote_reward_add_enchant: true
+  vote_reward_enchant: ""
+message:
+  prefix: "[zen]"
+  suffix: ""
+  increased: "increased"
+  decreased: "decreased"
+  steady: "steady"
+  next_cycle: "next_cycle"
+  already_highest: "already_highest"
+  no_vote_before: "no_vote_before"
+  not_enough_votes: "not_enough_votes"
+  failed: "failed"
+  vote_needed: "vote_needed from ${PROVIDER} - ${URL}"
+  vote_success: "vote_success"
+  vote_success_today: "vote_success_today"
+  vote_reward_delivered: "vote_reward_delivered"
+  vote_reward_buffered: "vote_reward_buffered"
+  vote_need_inspect: "vote_need_inspect"
+vote_provider:
+  - nachtbeere:
+      name: "Nachtbeere Network"
+      url: "https://games.nachtbeere.net"

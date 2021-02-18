@@ -1,0 +1,10 @@
+version: "0.3-SNAPSHOT"
+api-version: "1.15"
+name: "zen"
+main: "net.nachtbeere.minecraft.zen.Zen"
+description: "The Zen of votifier"
+author: "Mirai Kim(github: noxowl)"
+website: "https://github.com/Nachtbeere/Zen"
+depend: [Votifier]
+softdepend:
+  - LuckPerms
