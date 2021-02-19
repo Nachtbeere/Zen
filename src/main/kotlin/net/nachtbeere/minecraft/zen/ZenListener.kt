@@ -46,7 +46,7 @@ class ZenListener(private val pluginInstance: Zen): Listener {
     fun onPlayerJoin(event: PlayerJoinEvent) {
         pluginInstance.logger.info("player join execute")
         val resultData = logic.inspectPlayer(event.player, isLateInspect=false)
-        logic.deliverBufferedReward(event.player)
+        resultData.addAll(logic.deliverBufferedReward(event.player))
         for (result in resultData) {
             broadcast.messageToPlayer(result.code, event.player)
         }

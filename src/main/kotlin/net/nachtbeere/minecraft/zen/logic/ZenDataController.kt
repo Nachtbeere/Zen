@@ -1,11 +1,14 @@
 package net.nachtbeere.minecraft.zen.logic
 
 import net.nachtbeere.minecraft.zen.ZenChrono
+import net.nachtbeere.minecraft.zen.model.ZenRewardBuffer
 import net.nachtbeere.minecraft.zen.model.ZenVoteHistory
 import org.bukkit.OfflinePlayer
 import org.bukkit.entity.Player
+import sun.java2d.DisposerRecord
 import java.time.LocalDateTime
 import java.util.*
+import kotlin.collections.ArrayDeque
 
 class ZenDataController(): ZenLogicBase() {
     fun updateUser(uuid: UUID) {
@@ -27,14 +30,20 @@ class ZenDataController(): ZenLogicBase() {
         )
     }
 
-    fun deliverReward(uuid: UUID) {
-
+    fun writeRewardHistory(uuid: UUID) {
+        currentPlugin.storage!!.writeRewardHistory(uuid)
     }
 
     fun writeRewardBuffer(uuid: UUID) {
-        currentPlugin.storage!!.writeRewardBuffer(
-            uuid
-        )
+        currentPlugin.storage!!.writeRewardBuffer(uuid)
+    }
+
+    fun setExpireRewardBuffer(recordId: Long) {
+        currentPlugin.storage!!.setExpireRewardBuffer(recordId)
+    }
+
+    fun fetchBufferedReward(uuid: UUID): ArrayDeque<ZenRewardBuffer> {
+        return currentPlugin.storage!!.fetchRewardBuffers(uuid)
     }
 
     fun fetchOfflinePlayer(uuid: UUID): OfflinePlayer? {

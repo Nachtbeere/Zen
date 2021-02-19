@@ -5,6 +5,7 @@ import net.luckperms.api.model.user.User
 import net.luckperms.api.node.Node
 import net.luckperms.api.node.NodeType
 import net.luckperms.api.node.types.InheritanceNode
+import net.nachtbeere.minecraft.zen.PermissionMethod
 import org.bukkit.Bukkit
 import org.bukkit.plugin.RegisteredServiceProvider
 import java.util.*
@@ -12,8 +13,8 @@ import java.util.stream.Collectors
 
 class ZenPermissionFactory() {
     fun create(permissionMethod: String, groups: List<String>): ZenPermissionHandler {
-        return when (permissionMethod) {
-            "luckperm" -> LuckpermHandler(groups[0], groups)
+        return when (permissionMethod.toUpperCase()) {
+            PermissionMethod.LUCKPERM.name -> LuckpermHandler(groups[0], groups)
             else -> throw NullPointerException()
         }
     }

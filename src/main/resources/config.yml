@@ -24,9 +24,11 @@ logic:
     - 3
     - 5
   vote_reward_type: "minecraft"
-  vote_reward_code: ""
+  vote_reward_code: "emerald"
+  vote_reward_name: "밤딸기 기념주화"
+  vote_reward_amount: 1
   vote_reward_add_enchant: true
-  vote_reward_enchant: ""
+  vote_reward_enchant: "DURABILITY"
 message:
   prefix: "[zen]"
   suffix: ""

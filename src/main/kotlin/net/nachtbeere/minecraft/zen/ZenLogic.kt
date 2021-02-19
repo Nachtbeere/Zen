@@ -1,10 +1,7 @@
 package net.nachtbeere.minecraft.zen
 
 import com.vexsoftware.votifier.model.VotifierEvent
-import net.nachtbeere.minecraft.zen.logic.ZenDataController
-import net.nachtbeere.minecraft.zen.logic.ZenInspector
-import net.nachtbeere.minecraft.zen.logic.ZenLogicBase
-import net.nachtbeere.minecraft.zen.logic.ZenPermissionFactory
+import net.nachtbeere.minecraft.zen.logic.*
 import org.bukkit.entity.Player
 import java.time.ZoneOffset
 import java.util.*
@@ -30,6 +27,9 @@ class ZenLogic(private val logicConfig: ZenLogicConfig): ZenLogicBase() {
     private val inspector = ZenInspector(logicConfig)
     private val permission = ZenPermissionFactory().create(logicConfig.permissionMethod, logicConfig.grades)
     private val dataController = ZenDataController()
+    private val rewards = ZenRewardFactory().create(logicConfig.voteRewardType, logicConfig.voteRewardCode,
+         logicConfig.voteRewardAmount, logicConfig.voteRewardName,
+        logicConfig.isVoteRewardHasEnchant, logicConfig.availableVoteRewardEnchant)
 
     fun inspectPlayer(player: Player, isLateInspect: Boolean): ArrayList<ZenResult> {
         log("execute inspect player")
@@ -86,13 +86,30 @@ class ZenLogic(private val logicConfig: ZenLogicConfig): ZenLogicBase() {
     }
 
     fun deliverReward(player: Player): ArrayList<ZenResult> {
-        val resultCodeArray = arrayListOf<ZenResult>()
-        return resultCodeArray
+        val resultDataArray = arrayListOf<ZenResult>()
+        val result = rewards.sendReward(player)
+        if (result.code == ZenResultCode.VOTE_REWARD_BUFFERED) {
+            dataController.writeRewardBuffer(player.uniqueId)
+        } else {
+            dataController.writeRewardHistory(player.uniqueId)
+        }
+        resultDataArray.add(result)
+        return resultDataArray
     }
 
     fun deliverBufferedReward(player: Player): ArrayList<ZenResult> {
-        val resultCodeArray = arrayListOf<ZenResult>()
-        return resultCodeArray
+        log("execute deliver buffered reward")
+        val resultDataArray = arrayListOf<ZenResult>()
+        val bufferedRewards = dataController.fetchBufferedReward(player.uniqueId)
+        for (reward in bufferedRewards) {
+            val result = rewards.sendReward(player)
+            if (result.code == ZenResultCode.VOTE_REWARD_DELIVERED) {
+                dataController.setExpireRewardBuffer(reward.id)
+            }
+            resultDataArray.add(result)
+        }
+        log("deliver buffered reward result: $resultDataArray")
+        return resultDataArray
     }
 
     fun instantPromotion(player: Player) {

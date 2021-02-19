@@ -42,11 +42,12 @@ class ZenVoteHistoryDAO(id: EntityID<Long>): LongEntity(id) {
     }
 
     fun dump(): ZenVoteHistory {
-        return ZenVoteHistory(uuid, username, votedFrom, votedAt, expiredAt)
+        return ZenVoteHistory(id.value, uuid, username, votedFrom, votedAt, expiredAt)
     }
 }
 
 class ZenVoteHistory(
+    val id: Long,
     val uuid: UUID,
     val username: String,
     val votedFrom: String,
@@ -55,16 +56,5 @@ class ZenVoteHistory(
     val stringUUID: String = uuid.toString()
     val offsetVotedAt = utcTimeToOffset(votedAt)
     val offsetExpiredAt = utcTimeToOffset(expiredAt)
-    companion object {
-        fun voteRecordOf(event: VotifierEvent, expiredAt: LocalDateTime): ZenVoteHistory {
-            return ZenVoteHistory(
-                uuid=Bukkit.getPlayerUniqueId(event.vote.username)!!,
-                username=event.vote.username,
-                votedFrom=event.vote.serviceName,
-                votedAt=ZenChrono.utcNow(),
-                expiredAt=expiredAt
-            )
-        }
-    }
 }
 

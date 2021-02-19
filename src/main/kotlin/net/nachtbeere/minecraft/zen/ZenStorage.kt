@@ -52,7 +52,7 @@ class ZenStorage(private val config: ZenStorageConfig) {
 
     fun initialize() {
         this.purgeExpiredRewardBuffers()
-        this.setExpiredRewardBuffers()
+        this.bulkSetExpiredRewardBuffers()
     }
 
     fun writeUser(playerUUID: UUID, playerName: String) {
@@ -99,26 +99,23 @@ class ZenStorage(private val config: ZenStorageConfig) {
         }
     }
 
-    fun writeRewardHistory(player: Player, rewardData: ZenRewardBuffer) {
-        transaction {
-            addLogger(KotlinSqlLogger)
-            ZenRewardHistoryDAO.new {
-                uuid = player.uniqueId
-                reward = StringBuilder().append(rewardData.rewardType).append("#").append(rewardData.rewardCode).toString()
-                rewardFrom = rewardData.rewardFrom
-                receivedAt = ZenChrono.utcNow()
+    fun writeRewardHistory(playerUUID: UUID) {
+        if (config.useRewardHistory) {
+            transaction {
+                addLogger(KotlinSqlLogger)
+                ZenRewardHistoryDAO.new {
+                    uuid = playerUUID
+                    receivedAt = ZenChrono.utcNow()
+                }
             }
         }
     }
 
-    fun writeRewardBuffer(playerUUID: UUID, ) {
+    fun writeRewardBuffer(playerUUID: UUID) {
         transaction {
             addLogger(KotlinSqlLogger)
             ZenRewardBufferDAO.new {
                 uuid = playerUUID
-                rewardType = rewardType
-                rewardCode = rewardCode
-                rewardFrom = rewardFrom
                 rewardAt = ZenChrono.utcNow()
                 isExpired = false
             }
@@ -191,7 +188,18 @@ class ZenStorage(private val config: ZenStorageConfig) {
         return buffers
     }
 
-    fun setExpiredRewardBuffers() {
+    fun setExpireRewardBuffer(recordId: Long) {
+        transaction {
+            addLogger(KotlinSqlLogger)
+            val buffer = ZenRewardBufferDAO.findById(recordId)
+            if (buffer != null) {
+                buffer.isExpired = true
+            }
+        }
+
+    }
+
+    fun bulkSetExpiredRewardBuffers() {
         transaction {
             addLogger(KotlinSqlLogger)
             ZenRewardBufferDAO.find {

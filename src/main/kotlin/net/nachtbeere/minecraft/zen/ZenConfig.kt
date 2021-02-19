@@ -90,10 +90,27 @@ class ZenStorageConfig(unsafeConfig: MemorySection, val dataPath: String) {
     val rewardBufferExpires: Long = unsafeConfig.getLong("reward_buffer_expires")
 }
 
+
+
 class ZenLogicConfig(unsafeConfig: MemorySection) {
     val permissionMethod: String = unsafeConfig.getString("permission_method")!!
     val grades: List<String> = unsafeConfig.getStringList("grades")
     val votesForGrade: List<Int> = unsafeConfig.getIntegerList("votes_for_grade")
+    val voteRewardType: RewardType = setRewardType(unsafeConfig.getString("vote_reward_type")!!)
+    val voteRewardCode: String = unsafeConfig.getString("vote_reward_code")!!
+    val voteRewardAmount: Int = unsafeConfig.getInt("vote_reward_amount")
+    val voteRewardName: String = unsafeConfig.getString("vote_reward_name")!!
+    val isVoteRewardHasEnchant: Boolean = unsafeConfig.getBoolean("vote_reward_add_enchant")
+    val availableVoteRewardEnchant: String = unsafeConfig.getString("vote_reward_enchant")!!
+
+    private fun setRewardType(unsafeRewardType: String): RewardType {
+        return when (unsafeRewardType.toUpperCase()) {
+            RewardType.MINECRAFT.name -> RewardType.MINECRAFT
+            RewardType.HISUI.name -> RewardType.HISUI
+            RewardType.VAULT.name -> RewardType.VAULT
+            else -> throw NullPointerException()
+        }
+    }
 }
 
 data class ZenVoteProvider(
@@ -141,6 +158,16 @@ class ZenMessageConfig(unsafeConfig: MemorySection, unsafeVoteProvider: MutableL
             voteProviderMap[node.keys.first()] = ZenVoteProvider(first["name"]!!, first["url"]!!)
         }
     }
+}
+
+enum class RewardType(val rewardCode: Int) {
+    MINECRAFT(0),
+    HISUI(1),
+    VAULT(2)
+}
+
+enum class PermissionMethod(val methodCode: Int) {
+    LUCKPERM(0)
 }
 
 enum class ZenResultCode(val code: Int) {
