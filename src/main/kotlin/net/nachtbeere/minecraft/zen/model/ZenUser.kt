@@ -1,52 +1,34 @@
 package net.nachtbeere.minecraft.zen.model
 
-import net.nachtbeere.minecraft.zen.ZenChrono
-import org.bukkit.entity.Player
-import org.jetbrains.exposed.dao.IntEntity
-import org.jetbrains.exposed.dao.IntEntityClass
-import org.jetbrains.exposed.dao.UUIDEntity
-import org.jetbrains.exposed.dao.UUIDEntityClass
-import org.jetbrains.exposed.dao.id.EntityID
-import org.jetbrains.exposed.dao.id.IntIdTable
-import org.jetbrains.exposed.dao.id.UUIDTable
-import org.jetbrains.exposed.sql.Column
-import org.jetbrains.exposed.sql.`java-time`.datetime
+import org.ktorm.entity.Entity
+import org.ktorm.schema.*
+import org.ktorm.schema.Column
+import java.nio.ByteBuffer
+import java.sql.PreparedStatement
+import java.sql.ResultSet
 import java.time.LocalDateTime
 import java.util.*
+import java.util.UUID
 
-object ZenUsers: UUIDTable(name="zen_user") {
-    val username: Column<String> = varchar("username", 16)
-    val totalVote: Column<Int> = integer("total_vote").default(0)
-    val updatedAt: Column<LocalDateTime> = datetime("updated_at")
+val zenUserCreateQuery =
+    "CREATE TABLE IF NOT EXISTS ${ZenUsers.tableName} (" +
+            "${ZenUsers.id.name} UUID NOT NULL PRIMARY KEY," +
+            "${ZenUsers.username.name} VARCHAR(16) NOT NULL," +
+            "${ZenUsers.totalVote.name} INT DEFAULT 0 NOT NULL," +
+            "${ZenUsers.updatedAt.name} TEXT NOT NULL)"
+
+object ZenUsers: Table<ZenUser>("zen_user") {
+    var id = mySqlUuid("id").primaryKey().bindTo { it.id }
+    val username = varchar("username").bindTo { it.username }
+    val totalVote = int("total_vote").bindTo { it.totalVote }
+    val updatedAt = dateTimeUtc("updated_at").bindTo { it.updatedAt }
 }
 
-class ZenUserDAO(uuid: EntityID<UUID>): UUIDEntity(uuid) {
-    companion object: UUIDEntityClass<ZenUserDAO>(ZenUsers)
-
-    var username by ZenUsers.username
-    var totalVote by ZenUsers.totalVote
-    var updatedAt by ZenUsers.updatedAt
-
-    fun dump(): ZenUser {
-        return ZenUser(id.value, username, totalVote, updatedAt)
-    }
+interface ZenUser: Entity<ZenUser> {
+    companion object: Entity.Factory<ZenUser>()
+    var id: UUID
+    var username: String
+    var totalVote: Int
+    var updatedAt: LocalDateTime
 }
 
-class ZenUser(
-    val id: UUID,
-    val username: String,
-    val totalVote: Int,
-    val updatedAt: LocalDateTime): ZenModelBase() {
-    val stringUUID: String = id.toString()
-    val offsetUpdatedAt = utcTimeToOffset(updatedAt)
-    companion object {
-        fun userOf(player: Player): ZenUser {
-            return ZenUser(
-                id=player.uniqueId,
-                username=player.displayName,
-                totalVote=0,
-                updatedAt=ZenChrono.utcNow()
-            )
-        }
-    }
-}

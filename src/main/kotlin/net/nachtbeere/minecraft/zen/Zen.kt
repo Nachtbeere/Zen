@@ -29,10 +29,10 @@ class Zen : JavaPlugin() {
     override fun onLoad() {
         if (!(File(this.dataFolder, "config.yml")).exists()) this.saveDefaultConfig()
         loadConfig()
-        this.chrono = ZenChrono(config = this.zenConfig!!.chrono)
-        this.chrono!!.dryRun()
         this.storage = ZenStorage(config = this.zenConfig!!.storage)
         this.storage!!.initialize()
+        this.chrono = ZenChrono(config = this.zenConfig!!.chrono)
+        this.chrono!!.dryRun()
         this.scheduler = ZenScheduler()
     }
 

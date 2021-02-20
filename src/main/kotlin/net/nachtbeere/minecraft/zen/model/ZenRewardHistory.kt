@@ -1,44 +1,28 @@
 package net.nachtbeere.minecraft.zen.model
 
-import com.vexsoftware.votifier.model.VotifierEvent
-import net.nachtbeere.minecraft.zen.ZenChrono
-import net.nachtbeere.minecraft.zen.model.ZenRewardBuffers.references
-import org.bukkit.Bukkit
-import org.jetbrains.exposed.dao.LongEntity
-import org.jetbrains.exposed.dao.LongEntityClass
-import org.jetbrains.exposed.dao.id.EntityID
-import org.jetbrains.exposed.dao.id.LongIdTable
-import org.jetbrains.exposed.sql.Column
-import org.jetbrains.exposed.sql.`java-time`.datetime
+import org.ktorm.entity.Entity
+import org.ktorm.schema.*
 import java.time.LocalDateTime
 import java.util.*
 
-object ZenRewardHistories: LongIdTable(name="zen_reward_history") {
-    val uuid: Column<UUID> = uuid("uuid").references(ZenUsers.id)
-    val receivedAt: Column<LocalDateTime> = datetime("received_at")
+val zenRewardHistoryCreateQuery =
+    "CREATE TABLE IF NOT EXISTS ${ZenRewardHistories.tableName} (" +
+            "${ZenRewardHistories.id.name} INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "${ZenRewardHistories.uuid.name} UUID NOT NULL," +
+            "${ZenRewardHistories.receivedAt.name} TEXT NOT NULL," +
+            "CONSTRAINT fk_${ZenRewardHistories.tableName}_uuid_id FOREIGN KEY (${ZenRewardHistories.uuid.name}) " +
+            "REFERENCES ${ZenUsers.tableName}(${ZenUsers.id.name}) ON DELETE RESTRICT ON UPDATE RESTRICT)"
+
+object ZenRewardHistories: Table<ZenRewardHistory>("zen_reward_history") {
+    val id = long("id").primaryKey().bindTo { it.id }
+    val uuid = mySqlUuid("uuid").references(ZenUsers) { it.user }
+    val receivedAt = dateTimeUtc("received_at").bindTo { it.receivedAt }
 }
 
-class ZenRewardHistoryDAO(id: EntityID<Long>): LongEntity(id) {
-    companion object: LongEntityClass<ZenRewardHistoryDAO>(ZenRewardHistories)
-
-    var uuid by ZenRewardHistories.uuid
-    var receivedAt by ZenRewardHistories.receivedAt
-
-    fun load(history: ZenRewardHistory) {
-        this.uuid = history.uuid
-        this.receivedAt = history.receivedAt
-    }
-
-    fun dump(): ZenRewardHistory {
-        return ZenRewardHistory(id.value, uuid, receivedAt)
-    }
-}
-
-class ZenRewardHistory(
-    val id: Long,
-    val uuid: UUID,
-    val receivedAt: LocalDateTime,
-): ZenModelBase() {
-    val stringUUID: String = uuid.toString()
-    val offsetReceivedAt = utcTimeToOffset(receivedAt)
+interface ZenRewardHistory: Entity<ZenRewardHistory> {
+    companion object: Entity.Factory<ZenRewardHistory>()
+    val id: Long
+    var uuid: UUID
+    var receivedAt: LocalDateTime
+    var user: ZenUser
 }

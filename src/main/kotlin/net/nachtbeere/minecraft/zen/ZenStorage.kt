@@ -2,24 +2,26 @@ package net.nachtbeere.minecraft.zen
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
-import mu.KotlinLogging
 import net.nachtbeere.minecraft.zen.model.*
 import org.bukkit.entity.Player
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.statements.StatementContext
-import org.jetbrains.exposed.sql.statements.expandArgs
-import org.jetbrains.exposed.sql.transactions.transaction
+import org.ktorm.database.Database
+import org.ktorm.database.use
+import org.ktorm.dsl.*
+import org.ktorm.entity.add
+import org.ktorm.entity.find
+import org.ktorm.entity.sequenceOf
+import org.ktorm.entity.sortedBy
 import java.time.LocalDateTime
 import java.util.*
 import javax.sql.DataSource
 import kotlin.collections.ArrayDeque
 
-object KotlinSqlLogger: SqlLogger {
-    private val logger = KotlinLogging.logger {}
-    override fun log(context: StatementContext, transaction: Transaction) {
-        logger.info { "Query: ${context.expandArgs(transaction)}"}
-    }
-}
+//object KotlinSqlLogger: SqlLogger {
+//    private val logger = KotlinLogging.logger {}
+//    override fun log(context: StatementContext, transaction: Transaction) {
+//        logger.info { "Query: ${context.expandArgs(transaction)}"}
+//    }
+//}
 
 data class ZenQueuedTask(
     val player: Player,
@@ -28,18 +30,22 @@ data class ZenQueuedTask(
 )
 
 class ZenStorage(private val config: ZenStorageConfig) {
-    val inspectQueue: Queue<ZenQueuedTask> = LinkedList()
     private val taskMap: HashMap<UUID, Int> = hashMapOf()
-    private val db: DataSource = ZenStorageDriverFactory(config).create()
+    private val ds: DataSource = ZenStorageDriverFactory(config).create()
+    private val database = Database.connect(ds)
 
     init {
-        transaction(Database.connect(this.db)) {
-            addLogger(KotlinSqlLogger)
-            SchemaUtils.create(ZenUsers)
-            SchemaUtils.create(ZenRewardBuffers)
-            SchemaUtils.create(ZenVoteHistories)
-            SchemaUtils.create(ZenRewardHistories)
+        database.useConnection { conn ->
+            conn.prepareStatement(zenUserCreateQuery).use { it.executeUpdate() }
+            conn.prepareStatement(zenVoteHistoryCreateQuery).use { it.executeUpdate() }
+            conn.prepareStatement(zenRewardBufferCreateQuery).use { it.executeUpdate() }
+            conn.prepareStatement(zenRewardHistoryCreateQuery).use { it.executeUpdate() }
         }
+    }
+
+    fun initialize() {
+        purgeExpiredRewardBuffers()
+        bulkSetExpiredRewardBuffers()
     }
 
     fun writeTaskId(uuid: UUID, taskId: Int) {
@@ -50,74 +56,67 @@ class ZenStorage(private val config: ZenStorageConfig) {
         return taskMap[uuid]
     }
 
-    fun initialize() {
-        this.purgeExpiredRewardBuffers()
-        this.bulkSetExpiredRewardBuffers()
-    }
-
     fun writeUser(playerUUID: UUID, playerName: String) {
-        transaction {
-            addLogger(KotlinSqlLogger)
-            ZenUserDAO.new(playerUUID) {
-                username = playerName
-                totalVote = 0
-                updatedAt = ZenChrono.utcNow()
+        database.useTransaction {
+            val user = ZenUser {
+                this.id = playerUUID
+                this.username = playerName
+                this.updatedAt = ZenChrono.utcNow()
             }
+            database.sequenceOf(ZenUsers).add(user)
         }
     }
 
     fun updateUserDate(playerUUID: UUID) {
-        transaction {
-            addLogger(KotlinSqlLogger)
-            val user = ZenUserDAO.findById(playerUUID)
-            if (user != null) {
-                user.updatedAt = ZenChrono.utcNow()
+        database.useTransaction {
+            database.update(ZenUsers) {
+                set(it.updatedAt, ZenChrono.utcNow())
+                where {
+                    it.id eq playerUUID
+                }
             }
         }
     }
 
     fun increaseUserVoteCount(playerUUID: UUID) {
-        transaction {
-            addLogger(KotlinSqlLogger)
-            val user = ZenUserDAO.findById(playerUUID)
-            if (user != null) {
-                user.totalVote++
+        database.useTransaction {
+            database.update(ZenUsers) {
+                set(it.totalVote, it.totalVote + 1)
+                where {
+                    it.id eq playerUUID
+                }
             }
         }
     }
 
     fun writeVoteHistory(playerUUID: UUID, playerName: String, voteSource: String, voteDate: LocalDateTime, expiryDate: LocalDateTime) {
-        transaction {
-            addLogger(KotlinSqlLogger)
-            ZenVoteHistoryDAO.new {
-                uuid = playerUUID
-                username = playerName
-                votedFrom = voteSource
-                votedAt = voteDate
-                expiredAt = expiryDate
+        database.useTransaction {
+            database.insert(ZenVoteHistories) {
+                set(it.uuid, playerUUID)
+                set(it.username, playerName)
+                set(it.votedFrom, voteSource)
+                set(it.votedAt, voteDate)
+                set(it.expiredAt, expiryDate)
             }
         }
     }
 
     fun writeRewardHistory(playerUUID: UUID) {
         if (config.useRewardHistory) {
-            transaction {
-                addLogger(KotlinSqlLogger)
-                ZenRewardHistoryDAO.new {
-                    uuid = playerUUID
-                    receivedAt = ZenChrono.utcNow()
+            database.useTransaction {
+                database.insert(ZenRewardHistories) {
+                    set(it.uuid, playerUUID)
+                    set(it.receivedAt, ZenChrono.utcNow())
                 }
             }
         }
     }
 
     fun writeRewardBuffer(playerUUID: UUID) {
-        transaction {
-            addLogger(KotlinSqlLogger)
-            ZenRewardBufferDAO.new {
-                uuid = playerUUID
-                rewardAt = ZenChrono.utcNow()
-                isExpired = false
+        database.useTransaction {
+            database.insert(ZenRewardBuffers) {
+                set(it.uuid, playerUUID)
+                set(it.rewardAt, ZenChrono.utcNow())
             }
         }
     }
@@ -127,107 +126,95 @@ class ZenStorage(private val config: ZenStorageConfig) {
     }
 
     fun fetchZenUser(uuid: UUID): ZenUser? {
-        val user = transaction {
-            addLogger(KotlinSqlLogger)
-            ZenUserDAO.findById(uuid)
+        val user = database.useTransaction {
+            database.sequenceOf(ZenUsers).find { it.id eq uuid }
         }
-        return user?.dump()
+        return user
     }
 
     fun fetchLatestVoteHistory(uuid: UUID): ZenVoteHistory? {
-        val history = transaction {
-            addLogger(KotlinSqlLogger)
-            ZenVoteHistoryDAO
+        val history = database.useTransaction {
+            database.sequenceOf(ZenVoteHistories)
+                .sortedBy { it.votedAt.desc() }
                 .find { ZenVoteHistories.uuid eq uuid }
-                .orderBy(ZenVoteHistories.votedAt to SortOrder.DESC)
-                .firstOrNull()
         }
-        return history?.dump()
+        return history
     }
 
     fun fetchVoteHistories(uuid: UUID, previousBegin: LocalDateTime, previousEnd: LocalDateTime): ArrayDeque<ZenVoteHistory> {
         val histories = ArrayDeque<ZenVoteHistory>()
-        transaction {
-            addLogger(KotlinSqlLogger)
-            println(ZenVoteHistoryDAO
-                .find { (ZenVoteHistories.uuid eq uuid) and (ZenVoteHistories.votedAt.between(previousBegin, previousEnd)) }
-                .orderBy(ZenVoteHistories.votedAt to SortOrder.DESC).count()
-                )
-            ZenVoteHistoryDAO
-                .find { (ZenVoteHistories.uuid eq uuid) and (ZenVoteHistories.votedAt.between(previousBegin, previousEnd)) }
-                .orderBy(ZenVoteHistories.votedAt to SortOrder.DESC)
-                .forEach {
-                    println(it)
-                    histories.add(it.dump()) }
+        database.useTransaction {
+            database.from(ZenVoteHistories).select().where {
+                (ZenVoteHistories.uuid eq uuid) and (ZenVoteHistories.votedAt.between(previousBegin..previousEnd))
+            }.orderBy(ZenVoteHistories.votedAt.desc())
+                .map {
+                    histories.add(ZenVoteHistories.createEntity(it, withReferences = false))
+                }
         }
-        println(histories)
         return histories
     }
 
     fun fetchRewardHistories(uuid: UUID): ArrayDeque<ZenRewardHistory> {
         val histories = ArrayDeque<ZenRewardHistory>()
-        transaction {
-            addLogger(KotlinSqlLogger)
-            ZenRewardHistoryDAO
-                .find { ZenRewardHistories.uuid eq uuid }
-                .orderBy(ZenRewardHistories.receivedAt to SortOrder.DESC)
-                .all{ histories.add(it.dump()) }
+        database.useTransaction {
+            database.from(ZenRewardHistories).select().where {
+                ZenRewardHistories.uuid eq uuid
+            }.orderBy(ZenRewardHistories.receivedAt.desc())
+                .map {
+                    histories.add(ZenRewardHistories.createEntity(it, withReferences = false))
+                }
         }
         return histories
     }
 
     fun fetchRewardBuffers(uuid: UUID): ArrayDeque<ZenRewardBuffer> {
         val buffers = ArrayDeque<ZenRewardBuffer>()
-        transaction {
-            addLogger(KotlinSqlLogger)
-            ZenRewardBufferDAO
-                .find { (ZenRewardBuffers.uuid eq uuid) and (ZenRewardBuffers.isExpired eq Op.FALSE) }
-                .orderBy(ZenRewardBuffers.rewardAt to SortOrder.ASC)
-                .all{ buffers.add(it.dump()) }
+        database.useTransaction {
+            database.from(ZenRewardBuffers).select().where {
+                (ZenRewardBuffers.uuid eq uuid) and (ZenRewardBuffers.isExpired eq false)
+            }.orderBy(ZenRewardBuffers.rewardAt.asc())
+                .map {
+                    buffers.add(ZenRewardBuffers.createEntity(it, withReferences = false))
+                }
         }
         return buffers
     }
 
     fun setExpireRewardBuffer(recordId: Long) {
-        transaction {
-            addLogger(KotlinSqlLogger)
-            val buffer = ZenRewardBufferDAO.findById(recordId)
-            if (buffer != null) {
-                buffer.isExpired = true
+        database.useTransaction {
+            database.update(ZenRewardBuffers) {
+                set(it.isExpired, true)
+                where {
+                    it.id eq recordId
+                }
             }
         }
 
     }
 
     fun bulkSetExpiredRewardBuffers() {
-        transaction {
-            addLogger(KotlinSqlLogger)
-            ZenRewardBufferDAO.find {
-                ZenRewardBuffers.rewardAt.less(ZenChrono.expiryDate(config.rewardBufferExpires))
-            }.forEach {
-                it.isExpired = true
+        database.useTransaction {
+            database.update(ZenRewardBuffers) {
+                set(it.isExpired, true)
+                where {
+                    it.rewardAt less ZenChrono.expiryDate(config.rewardBufferExpires)
+                }
             }
         }
     }
 
     fun purgeExpiredRewardBuffers() {
-        transaction {
-            addLogger(KotlinSqlLogger)
-            ZenRewardBufferDAO.find {
-                ZenRewardBuffers.isExpired eq Op.TRUE
-            }.forEach {
-                it.delete()
+        database.useTransaction {
+            database.delete(ZenRewardBuffers) {
+                it.isExpired eq true
             }
         }
     }
 
     fun purgeExpiredVoteHistory(previousBegin: LocalDateTime) {
-        transaction {
-            addLogger(KotlinSqlLogger)
-            ZenRewardBufferDAO.find {
-                ZenVoteHistories.expiredAt.less(previousBegin)
-            }.forEach {
-                it.delete()
+        database.useTransaction {
+            database.delete(ZenVoteHistories) {
+                it.expiredAt less previousBegin
             }
         }
     }
