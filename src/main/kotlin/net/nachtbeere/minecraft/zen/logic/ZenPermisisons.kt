@@ -54,7 +54,7 @@ class LuckpermHandler(private val defaultGroup: String, private val indexedGroup
 
     override fun getPermissionGroup(uuid: UUID): String {
         val groups = getPermissionGroupSet(getUser(uuid))
-        return getHighestFromPermissionGroups(groups)
+        return groups.last()
     }
 
     override fun setPermissionGroup(uuid: UUID, group: String) {
@@ -77,15 +77,10 @@ class LuckpermHandler(private val defaultGroup: String, private val indexedGroup
         val user = getUserByUsername(username)
         return if (user != null) {
             val groups = getPermissionGroupSet(user)
-            getHighestFromPermissionGroups(groups)
+            groups.last()
         } else {
             null
         }
-
-    }
-
-    private fun getHighestFromPermissionGroups(groups: Set<String>): String {
-        return groups.toList().sortedBy { indexedGroup.indexOf(it) }.last()
     }
 
     private fun purgeNonDefaultPermissionGroup(uuid: UUID) {
@@ -109,13 +104,16 @@ class LuckpermHandler(private val defaultGroup: String, private val indexedGroup
         return api!!.userManager.getUser(username)
     }
 
-    private fun getPermissionGroupSet(user: User): Set<String> {
-        val groups = user.nodes.stream()
-            .filter(NodeType.INHERITANCE::matches)
-            .map(NodeType.INHERITANCE::cast)
-            .map(InheritanceNode::getGroupName)
-            .collect(Collectors.toSet())
+    private fun getPermissionGroupSet(user: User): List<String> {
+        // java.util.stream.Stream has bug in docker java(Java 1.8 (OpenJDK 64-Bit Server VM 25.212-b04))
+        // use for-loop.
+        val groups = arrayListOf<String>()
+        for (group in indexedGroup) {
+            if (user.nodes.contains(InheritanceNode.builder(group).build())) {
+                groups.add(group)
+            }
+        }
         infoLog("permission groups: $groups")
-        return groups
+        return groups.sortedBy { indexedGroup.indexOf(it) }
     }
 }
